@@ -38,6 +38,11 @@ The server reads these environment variables:
 | `EXPENSE_DB_PATH` | `./expenses.db` | SQLite database path |
 | `EXPENSE_CATEGORIES_PATH` | `./categories.json` | Categories JSON path |
 
+For FastMCP Cloud, set `EXPENSE_DB_PATH` to a writable persistent path if your
+deployment provides one. If you do not set it and the app directory is
+read-only, the server falls back to a temp directory so writes can succeed, but
+that data may disappear after the cloud server restarts.
+
 Typical remote start command:
 
 ```powershell
@@ -56,5 +61,7 @@ https://your-domain.example/mcp
 - Make sure the hosting provider exposes the assigned `PORT`.
 - If you keep SQLite, configure persistent storage and set `EXPENSE_DB_PATH`
   to that mounted path. Otherwise the database may reset after redeploys.
+- Use the `database_status` tool from Claude to see the active database path and
+  whether SQLite can be initialized.
 - For a public server, add authentication or place it behind a protected
   gateway before storing real financial data.

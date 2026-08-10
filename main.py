@@ -2,44 +2,95 @@ from fastmcp import FastMCP
 import json
 import os
 import sqlite3
+import tempfile
 
 BASE_DIR = os.path.dirname(__file__)
-DB_PATH = os.getenv("EXPENSE_DB_PATH", os.path.join(BASE_DIR, "expenses.db"))
+CONFIGURED_DB_PATH = os.getenv("EXPENSE_DB_PATH")
+DB_PATH = CONFIGURED_DB_PATH or os.path.join(BASE_DIR, "expenses.db")
 CATEGORIES_PATH = os.getenv("EXPENSE_CATEGORIES_PATH", os.path.join(BASE_DIR, "categories.json"))
 LEGACY_CATEGORIES_PATH = os.path.join(BASE_DIR, "categoreis.json")
 
 mcp = FastMCP("ExpenseTracker")
 
-async def init_db():
-    try:
-        db_dir = os.path.dirname(DB_PATH)
-        if db_dir:
-            os.makedirs(db_dir, exist_ok=True)
+def candidate_db_paths():
+    paths = [DB_PATH]
 
+    if not CONFIGURED_DB_PATH:
+        fastmcp_home = os.getenv("FASTMCP_HOME")
+        if fastmcp_home:
+            paths.append(os.path.join(fastmcp_home, "expense-tracker", "expenses.db"))
+
+        paths.append(os.path.join(tempfile.gettempdir(), "expense-tracker", "expenses.db"))
+
+    seen = set()
+    for path in paths:
+        absolute_path = os.path.abspath(path)
+        if absolute_path not in seen:
+            seen.add(absolute_path)
+            yield absolute_path
+
+async def init_db():
+    global DB_PATH
+
+    errors = []
+    for path in candidate_db_paths():
+        try:
+            db_dir = os.path.dirname(path)
+            if db_dir:
+                os.makedirs(db_dir, exist_ok=True)
+
+            with sqlite3.connect(path) as c:
+                c.execute("""
+                    CREATE TABLE IF NOT EXISTS expenses(
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        date TEXT NOT NULL,
+                        amount REAL NOT NULL,
+                        category TEXT NOT NULL,
+                        subcategory TEXT DEFAULT '',
+                        note TEXT DEFAULT ''
+                    )
+                """)
+                c.execute("""
+                    CREATE TABLE IF NOT EXISTS budgets(
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        start_date TEXT NOT NULL,
+                        end_date TEXT NOT NULL,
+                        amount REAL NOT NULL,
+                        category TEXT DEFAULT '',
+                        note TEXT DEFAULT '',
+                        UNIQUE(start_date, end_date, category)
+                    )
+                """)
+
+            DB_PATH = path
+            return
+        except Exception as exc:
+            errors.append(f"{path}: {exc}")
+
+    suggestions = (
+        "Set EXPENSE_DB_PATH to a writable persistent path in your deployment, "
+        "or use an external database for production persistence."
+    )
+    raise RuntimeError(f"Failed to initialize database. Tried {errors}. {suggestions}")
+
+@mcp.tool()
+async def database_status():
+    '''Check whether the expense database can be initialized and written to.'''
+    try:
+        await init_db()
         with sqlite3.connect(DB_PATH) as c:
-            c.execute("""
-                CREATE TABLE IF NOT EXISTS expenses(
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    date TEXT NOT NULL,
-                    amount REAL NOT NULL,
-                    category TEXT NOT NULL,
-                    subcategory TEXT DEFAULT '',
-                    note TEXT DEFAULT ''
-                )
-            """)
-            c.execute("""
-                CREATE TABLE IF NOT EXISTS budgets(
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    start_date TEXT NOT NULL,
-                    end_date TEXT NOT NULL,
-                    amount REAL NOT NULL,
-                    category TEXT DEFAULT '',
-                    note TEXT DEFAULT '',
-                    UNIQUE(start_date, end_date, category)
-                )
-            """)
+            c.execute("PRAGMA user_version")
+        return {
+            "status": "ok",
+            "db_path": DB_PATH,
+            "configured_by_env": CONFIGURED_DB_PATH is not None,
+            "persistent_storage_note": (
+                "If this path is under a temp directory, data can disappear after the cloud server restarts. "
+                "Set EXPENSE_DB_PATH to persistent storage for real use."
+            ),
+        }
     except Exception as exc:
-        raise RuntimeError(f"Failed to initialize database: {exc}") from exc
+        return {"status": "error", "message": str(exc)}
 
 @mcp.tool()
 async def add_expense(date: str, amount: float, category: str, subcategory: str = "", note: str = ""):
