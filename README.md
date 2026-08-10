@@ -1,6 +1,13 @@
 # Expense Tracker MCP Server
 
-FastMCP server for tracking expenses and budgets over HTTP.
+This project is a lightweight FastMCP server for managing personal expenses and budgets over HTTP. It provides a simple way to store expenses in a local SQLite database, organize them by category, and query spending information through MCP-compatible tools.
+
+### What it does
+
+- Tracks expense entries with amounts, dates, and descriptions
+- Supports category-based organization using a JSON category list
+- Exposes expense-related operations through an MCP server endpoint
+- Can be run locally for development or deployed remotely for HTTP access
 
 ## Run locally
 
@@ -13,9 +20,6 @@ The local MCP endpoint is:
 ```text
 http://localhost:8000/mcp
 ```
-
-Do not use `http://0.0.0.0:8000/mcp` in a browser or MCP client. `0.0.0.0`
-is only the server bind address.
 
 ## Remote deployment
 
