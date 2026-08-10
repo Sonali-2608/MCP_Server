@@ -9,6 +9,13 @@ This project is a lightweight FastMCP server for managing personal expenses and 
 - Exposes expense-related operations through an MCP server endpoint
 - Can be run locally for development or deployed remotely for HTTP access
 
+Users can view their data through MCP clients such as Claude Desktop:
+
+- Ask "show all expenses" to call `list_expenses`.
+- Ask "show my budgets" to call `list_budgets`.
+- Ask for a date range, such as "show expenses from 2026-08-01 to 2026-08-31",
+  to filter the expense list.
+
 ## Run locally
 
 ```powershell

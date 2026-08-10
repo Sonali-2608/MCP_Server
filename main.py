@@ -248,20 +248,29 @@ async def delete_expense_by_id(expense_id: int):
         return {"status": "error", "message": str(exc)}
     
 @mcp.tool()
-async def list_expenses(start_date: str, end_date: str):
-    '''List expense entries within an inclusive date range.'''
+async def list_expenses(start_date: str | None = None, end_date: str | None = None):
+    '''List expense entries, optionally within an inclusive date range.'''
     try:
         await init_db()
+        query = """
+            SELECT id, date, amount, category, subcategory, note
+            FROM expenses
+            WHERE 1 = 1
+        """
+        params = []
+
+        if start_date:
+            query += " AND date >= ?"
+            params.append(start_date)
+
+        if end_date:
+            query += " AND date <= ?"
+            params.append(end_date)
+
+        query += " ORDER BY date DESC, id DESC"
+
         with sqlite3.connect(DB_PATH) as c:
-            cur = c.execute(
-                """
-                SELECT id, date, amount, category, subcategory, note
-                FROM expenses
-                WHERE date BETWEEN ? AND ?
-                ORDER BY id ASC
-                """,
-                (start_date, end_date)
-            )
+            cur = c.execute(query, params)
             cols = [d[0] for d in cur.description]
             return [dict(zip(cols, r)) for r in cur.fetchall()]
     except Exception as exc:
